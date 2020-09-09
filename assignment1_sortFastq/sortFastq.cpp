@@ -1,10 +1,9 @@
-#include <iomanip>
 #include <iostream>
 #include <fstream>
 #include <vector>
 #include <string>
-#include <cassert>
-#include <sys/time.h>
+#include <cstdlib>
+#include <cstdio>
 
 using namespace std;
 
@@ -15,69 +14,64 @@ struct Sample {
   string q_score;
 };
 
-void read_data(vector<Sample> &sample_array, string file_path) {
-  ifstream fin;
+void read_data(vector<Sample> &sample_array, vector<Sample *> &ptr_array, const char* file_path) {
+  ifstream fin(file_path);
   string line;
-  int i = 0;
-
-  fin.open(file_path, ios::in);
-  assert(!fin.fail());
-
+ 
   while(!fin.eof()) {
-    sample_array.push_back(Sample());
+    Sample *ptr = new Sample;
     getline(fin, line);
-    sample_array[i].identifier = line;
+    ptr->identifier = line;
     getline(fin, line);
-    sample_array[i].sequence = line;
+    ptr->sequence = line;
     getline(fin, line);
-    sample_array[i].description = line;
+    ptr->description = line;
     getline(fin, line);
-    sample_array[i].q_score = line;
-    i++;
+    ptr->q_score = line;
+    sample_array.push_back(*ptr);
+    ptr_array.push_back(ptr);
   }
   fin.close();
 }
 
-void swap(vector<Sample> &sample_array, int idx, int jdx) {
-  Sample tmp = sample_array[idx];
-  sample_array[idx] = sample_array[jdx];
-  sample_array[jdx] = tmp; 
+void swap(vector<Sample *> &ptr_array, int idx, int jdx) {
+  Sample* tmp = ptr_array[idx];
+  ptr_array[idx] = ptr_array[jdx];
+  ptr_array[jdx] = tmp;
 }
 
-int partition(vector<Sample> &sample_array, int low, int high) {
-  Sample pivot = sample_array[high];
+int partition(vector<Sample *> &ptr_array, int low, int high) {
+  int mid = (low + high) / 2;
+  if (ptr_array[mid]->sequence < ptr_array[low]->sequence) {
+    swap(ptr_array, low, mid);
+  } else if (ptr_array[high]->sequence < ptr_array[low]->sequence) {
+    swap(ptr_array, low, high);
+  } else if (ptr_array[mid]->sequence < ptr_array[high]->sequence){
+    swap(ptr_array, mid, high);
+  }
+  Sample* pivot = ptr_array[high];
   int j = low - 1;
 
   for (int i = low; i <= high; i++) {
-    if (sample_array[i].sequence < pivot.sequence) {
+    if (ptr_array[i]->sequence < pivot->sequence) {
       j++;
-      swap(sample_array, j, i);
+      swap(ptr_array, j, i);
     }
   }
-  swap(sample_array, j + 1, high);
+  swap(ptr_array, j + 1, high);
   return (j + 1);
 }
 
-void quicksort(vector<Sample> &sample_array, int low, int high) {
+void quicksort(vector<Sample *> &ptr_array, int low, int high) {
   if (low < high) {
-    int p = partition(sample_array, low, high);
+    int p = partition(ptr_array, low, high);
     // Left side and then right side recursively
-    quicksort(sample_array, low, p - 1);
-    quicksort(sample_array, p + 1, high);
+    quicksort(ptr_array, low, p - 1);
+    quicksort(ptr_array, p + 1, high);
   }
 }
 
-double time_to_double(timeval *t)
-{
-    return (t->tv_sec + (t->tv_usec/1000000.0)) * 1000.0;
-}
-
-double time_diff(timeval *t1, timeval *t2)
-{
-    return time_to_double(t2) - time_to_double(t1);
-}
-
-int main(int argc, char **argv) {
+int main(int argc, const char **argv) {
   // Tests to check that the number of arguments and file type are adequate
   if (argc > 2) {
     cout << "sortFastq takes no more than one command-line argument" << endl;
@@ -89,25 +83,20 @@ int main(int argc, char **argv) {
     cout << "Invalid file type provided. File must be a fastq file." << endl;
     exit(-1);
   }
-
-  vector<Sample> sample_array;
-
-  timeval t1, t2;
-  gettimeofday(&t1, NULL);
-  read_data(sample_array, argv[1]);
-  gettimeofday(&t2, NULL);
-  cout << "read_data1" << ": " << time_diff(&t1, &t2) << "ms" << endl;
-
-  timeval t3, t4;
-  gettimeofday(&t3, NULL);
-  quicksort(sample_array, 0, sample_array.size() - 1);
-  gettimeofday(&t4, NULL);
-  cout << "quicksort:" << time_diff(&t1, &t2) << "ms" << endl;
   
+  vector<Sample> sample_array;
+  vector<Sample*> ptr_array;
+  
+  read_data(sample_array, ptr_array, argv[1]);
+  
+  quicksort(ptr_array, 0, sample_array.size() - 1);
+
+  for (int i = 1; i < sample_array.size(); i++) {
+    cout << ptr_array[i]->identifier << "\n";
+    cout << ptr_array[i]->sequence << "\n";
+    cout << ptr_array[i]->description << "\n";
+    cout << ptr_array[i]->q_score << "\n";
+  }
+
   return 0;
 }
-
-
-
-
-
