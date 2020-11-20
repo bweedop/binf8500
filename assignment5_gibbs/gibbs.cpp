@@ -10,11 +10,12 @@
 // Max iterations to avoid infinite loops
 #define MAX_ITER 2000
 // Max iterations until plateau
-#define ITER 400
+#define ITER 200
 //Max number of seeds
 #define SEEDS 20
 // Number of adjustments
 #define NUM_ADJ 5
+#define ADJ -3
 
 using namespace std;
 
@@ -102,6 +103,9 @@ void frequency_matrix(int **sequences, int motif_locations[], int data_info[], i
             {
                 if (sequences[i][motif_locations[i] + j] > 3)
                 {
+                    //cout << i << " " << j << " " << motif_size << endl;
+                    //cout << data_info[1] << " " << motif_locations[i]  << "\n";
+                    //cout << sequences[i][motif_locations[i] + j] << "\n";
                     cout << "Error: Ambiguous character in motif" << j << "\n";
                     exit(-3);
                 }
@@ -192,7 +196,7 @@ double objective_fx(int **sequences, int motif_locations[], int data_info[], int
         // Probability matrix to PSSM
         pssm(f_matrix, m, gc_values[i]);
         // Get score at current motif_locations[i]
-        total_score += get_score(f_matrix, sequences[i], 0, m);
+        total_score += get_score(f_matrix, sequences[i], motif_locations[i], motif_locations[i] + m);
     }
 
     // Cleaning
@@ -270,6 +274,16 @@ void run_pssm(int **sequences, int data_info[], int motif_locations[], int m, fl
                 index_arr[score_idx] = low;
                 score_idx++;
             }
+            else
+            {
+                total_score += 0;
+                // store current total score in score array
+                score_array[score_idx] = total_score;
+                // store the index of the sequence that produced the score above
+                index_arr[score_idx] = low;
+                score_idx++;
+            }
+            
         }
 
         // Normalize scores
@@ -300,126 +314,161 @@ void run_pssm(int **sequences, int data_info[], int motif_locations[], int m, fl
     delete[] f_matrix;
 }
 
-void adjuster(int **sequences, int motif_locations[], int data_info[], int &m, float gc_values[])
+void adjuster(int **sequences, int motif_locations[], int data_info[], int &m, float gc_values[], double current_optimum)
 {
-    double optimum = -999999.9;
+    double optimum = current_optimum;
     double current_score = 0.0;
     int tmp_locations[data_info[0]];
+    for (int j = 0; j < data_info[0]; j++)
+    {
+        tmp_locations[j] = motif_locations[j];
+    }
     int adjusted_locations[data_info[0]];
     int tmp_m = m;
 
     // Left side adjustment
-    for (int i = -1; i < 2; i++)
-    {
-        for (int j = 0; j < data_info[0]; j++)
-        {
-            adjusted_locations[j] = motif_locations[j] + i;
-            if ((adjusted_locations[j] + m - 1) > data_info[1])
-            {
-                break;
-            }
-        }       
-        // Current score from objective_fx
-        current_score = objective_fx(sequences, adjusted_locations, data_info, m, gc_values);
-        if (current_score > optimum)
-        {
-            optimum = current_score;
-            //tmp_m = tmp_m - i;
-            for (int j = 0; j < data_info[0]; j++)
-            {
-                tmp_locations[j] = adjusted_locations[j];
-            }
-        }
-    }
-    
-    // Right side adjustment
-    int tmp = -1;
+    int tmp = ADJ;
     bool oneAtEnd = false;
-    while(tmp < 2 || oneAtEnd == false)
+    while(tmp < abs(ADJ) + 1)
     {
         for (int j = 0; j < data_info[0]; j++)
         {
-            if ((motif_locations[j] + m - 1) + tmp)
+            if (motif_locations[j] + tmp >= 0) {
+                adjusted_locations[j] = motif_locations[j] + tmp;
+            }
+            else
             {
                 oneAtEnd = true;
             }
         }
-
-        // Current score from objective_fx
-        current_score = objective_fx(sequences, motif_locations, data_info, m + tmp, gc_values);
-
-        if (current_score > optimum)
+        if (!oneAtEnd) 
         {
-            optimum = current_score;
-            //tmp_m = m + tmp;
-        }
-        tmp++;
-    }
-    /*
-    //Both sides
-    tmp = -1;
-    oneAtEnd = false;
-    while(tmp < 2 || oneAtEnd == false)
-    {
-        // Don't need to do 0
-        if (tmp != 0)
-        {
-            for (int j = 0; j < data_info[0]; j++)
-            {
-                adjusted_locations[j] = motif_locations[j] + tmp;
-                if ((adjusted_locations[j] + m - 1) + (m + tmp))
-                {
-                    oneAtEnd = true;
-                }
-            }
-        
             // Current score from objective_fx
-            current_score = objective_fx(sequences, tmp_locations, data_info, m + tmp, gc_values);
-
+            current_score = objective_fx(sequences, adjusted_locations, data_info, m - tmp, gc_values);
             if (current_score > optimum)
             {
                 optimum = current_score;
-                //tmp_m = m - i;
+                tmp_m = m - tmp;
                 for (int j = 0; j < data_info[0]; j++)
                 {
                     tmp_locations[j] = adjusted_locations[j];
                 }
             }
+            tmp++;
+        }
+        else
+        {
+            oneAtEnd=false;
+            tmp++;
+        }   
+    }
+    
+    // Right side adjustment
+    tmp = ADJ;
+    oneAtEnd = false;
+    while(tmp < abs(ADJ) + 1)
+    {
+        for (int j = 0; j < data_info[0]; j++)
+        {
+            if ((motif_locations[j] + m - 1) + tmp >= data_info[1])
+            {
+                oneAtEnd = true;
+            }
+        }
+        if (!oneAtEnd)
+        {
+            // Current score from objective_fx
+            current_score = objective_fx(sequences, motif_locations, data_info, m + tmp, gc_values);
+            if (current_score > optimum)
+            {
+                optimum = current_score;
+                tmp_m = m + tmp;
+                for (int j = 0; j < data_info[0]; j++)
+                {
+                    tmp_locations[j] = motif_locations[j];
+                }
+            }
+            tmp++;
+        }
+        else
+        {
+            oneAtEnd=false;
+            tmp++;
         }
     }
     
-    tmp = -1;
+    //Both sides
+    tmp = ADJ;
     oneAtEnd = false;
-    while(tmp < 2 || oneAtEnd == false)
+    while(tmp < abs(ADJ) + 1)
     {
-        // Don't need to do 0
-        if (tmp != 0)
+        for (int j = 0; j < data_info[0]; j++)
         {
-            for (int j = 0; j < data_info[0]; j++)
-            {
+            if (motif_locations[j] + tmp >= 0 && ((motif_locations[j] + tmp) + (m + tmp)) < data_info[1]) {
                 adjusted_locations[j] = motif_locations[j] + tmp;
-                if ((adjusted_locations[j] + m - 1) + (m - tmp))
-                {
-                    oneAtEnd = true;
-                }
             }
-        
+            else
+            {
+                oneAtEnd = true;
+            }
+        }
+        if (!oneAtEnd)
+        {
             // Current score from objective_fx
-            current_score = objective_fx(sequences, tmp_locations, data_info, m - tmp, gc_values);
-
+            current_score = objective_fx(sequences, adjusted_locations, data_info, m + tmp, gc_values);
             if (current_score > optimum)
             {
                 optimum = current_score;
-                tmp_m = m - (2 * tmp);
+                tmp_m = m + tmp;
                 for (int j = 0; j < data_info[0]; j++)
                 {
                     tmp_locations[j] = adjusted_locations[j];
                 }
             }
+            tmp++;
         }
+        else
+        {
+            oneAtEnd=false;
+            tmp++;
+        }        
     }
-    */
-    //m = tmp_m;
+    tmp = ADJ;
+    oneAtEnd = false;
+    while(tmp < abs(ADJ) + 1)
+    {
+        for (int j = 0; j < data_info[0]; j++)
+        {
+            if (motif_locations[j] + tmp >= 0 && ((motif_locations[j] + tmp) + (m - tmp)) < data_info[1]) {
+                adjusted_locations[j] = motif_locations[j] + tmp;
+            }
+            else
+            {
+                oneAtEnd = true;
+            }
+        }
+        if (!oneAtEnd)
+        {
+            // Current score from objective_fx
+            current_score = objective_fx(sequences, adjusted_locations, data_info, m - tmp, gc_values);
+            if (current_score > optimum)
+            {
+                optimum = current_score;
+                tmp_m = m - tmp;
+                for (int j = 0; j < data_info[0]; j++)
+                {
+                    tmp_locations[j] = adjusted_locations[j];
+                }
+            }
+            tmp++;
+        }
+        else
+        {
+            oneAtEnd=false;
+            tmp++;
+        }        
+    }
+    m = tmp_m;
     for (int j = 0; j < data_info[0]; j++)
     {
         motif_locations[j] = tmp_locations[j];
@@ -432,7 +481,7 @@ int main(int argc, char **argv)
     if (argc == 1)
     {
         cout << "Unsupervised motif finding/Gibbs Sampler\n";
-        cout << "The following arguments are required to be specified by the user:\n";
+        cout << "The following arguments are required:\n";
         cout << "\t1. Function call (e.g. `./gibbs`)\n";
         cout << "\t2. Path to data file (e.g. `data/some-data-file.fasta`)\n";
         cout << "\t3. Length of motif (e.g. `10`)\n";
@@ -442,7 +491,8 @@ int main(int argc, char **argv)
     // initialize random seed:
     srand(time(NULL));
     // Assign variable to length of motifs
-    int m = atoi(argv[2]);
+    int init_m, opt_m, m;
+    init_m = opt_m = m = atoi(argv[2]);
     char bp[] = {'A', 'T', 'C', 'G', 'N'};
     // Get the number of sequences in the data file
     int *data_info;
@@ -492,6 +542,7 @@ int main(int argc, char **argv)
     int motif_locations[data_info[0]];
     while (num_seeds < SEEDS)
     {
+        m = init_m;
         for (int i = 0; i < data_info[0]; i++)
         {
             // Random index from 0 to (length of sequence - length of motifs)
@@ -503,23 +554,24 @@ int main(int argc, char **argv)
         int until_adjust = 0;
         double seed_optimum = -9999999.0;
         double current_score = 0.0;
-        while (iterations < ITER || max_iterations < 2000)
+        while (iterations < ITER || max_iterations < MAX_ITER)
         {
+            //cout << "all okay\n";
             if (until_adjust > NUM_ADJ)
             {
                 // Run adjustment step
-                adjuster(sequences, motif_locations, data_info, m, gc_values);
+                adjuster(sequences, motif_locations, data_info, m, gc_values, seed_optimum);
+                until_adjust = 0;
             }
+            
             // Run gibbs sampler for all sequences and reassign motif_locations
             run_pssm(sequences, data_info, motif_locations, m, gc_values);
-
             // Current score from objective_fx
             current_score = objective_fx(sequences, motif_locations, data_info, m, gc_values);
             // Check if current_score is higher than optimum
             if (current_score > seed_optimum)
             {
                 seed_optimum = current_score;
-                iterations = 0;
             }
             iterations++;
             until_adjust++;
@@ -530,6 +582,7 @@ int main(int argc, char **argv)
         {
             // Set new optimum
             optimum = seed_optimum;
+            opt_m = m;
             // Set optimum motif locations
             for (int i = 0; i < data_info[0]; i++)
             {
@@ -542,13 +595,13 @@ int main(int argc, char **argv)
     // Print output
     for (int i = 0; i < data_info[0]; i++)
     {
-        for (int j = 0; j < m; j++)
+        for (int j = 0; j < opt_m; j++)
         {
             cout << bp[sequences[i][optimum_locations[i] + j]];
         }
         cout << " " << labels[i] << " " << optimum_locations[i] << "\n";
     }
-    cout << optimum << "\n";
+    cout << optimum << " " << opt_m << "\n";
 
     //Cleaning house
     //Free each sub-array
